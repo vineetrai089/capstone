@@ -65,6 +65,9 @@ jobs:
         auth:
           username: $DOCKER_USERNAME
           password: $DOCKER_PASS
+
+    working_directory: ~/repo
+
     steps:
       - checkout
       - setup_remote_docker:
