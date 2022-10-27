@@ -2,7 +2,7 @@ FROM python:3.7.3-stretch
 
 WORKDIR /app
 
-COPY hello.py /app/
+COPY hello_udacity.py /app/
 COPY requirements.txt /app/
 
 # Install packages from requirements.txt
@@ -15,4 +15,4 @@ RUN pip install  --no-cache-dir --upgrade pip && \
 EXPOSE 80
 
 # Run app at container launch
-CMD ["python", "hello.py"]
+CMD ["python", "hello_udacity.py"]

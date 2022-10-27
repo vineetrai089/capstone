@@ -13,7 +13,7 @@ commands:
           name: Destroy environments
           when: on_fail
           command: |
-            aws delete cluster --stack-name --region=us-east-2 "eksctl-${CIRCLE_WORKFLOW_ID:0:7}"
+            aws delete cluster --stack-name --region=us-west-1 "eksctl-${CIRCLE_WORKFLOW_ID:0:7}"
 
 jobs:
   test-build:
@@ -44,15 +44,15 @@ jobs:
       - run:
           name: Build docker container
           command: |
-            docker build --tag=hello-image .
+            docker build --tag=hello-udacity-image .
             docker image ls
       - run:
           name: Upload Docker to Dockerhub
           command: |
-            dockerpath="vineetrai089/hello-image"
+            dockerpath="vineetrai089/hello-udacity-image"
             docker login --username=vineetrai089 --password=$DOCKER_PASS
-            docker tag "hello-image" "${dockerpath}:${CIRCLE_WORKFLOW_ID:0:7}"
-            docker tag "hello-image" "${dockerpath}:latest"
+            docker tag "hello-udacity-image" "${dockerpath}:${CIRCLE_WORKFLOW_ID:0:7}"
+            docker tag "hello-udacity-image" "${dockerpath}:latest"
             docker push "${dockerpath}:${CIRCLE_WORKFLOW_ID:0:7}"
             docker push "${dockerpath}:latest"
 
@@ -65,24 +65,24 @@ jobs:
           name: Install dependancies
           command: |
             yum install -y tar gzip
-            curl -o kubectl https://s3.us-east-1.amazonaws.com/amazon-eks/1.22.6/2022-03-09/bin/linux/amd64/kubectl
+            curl -o kubectl https://s3.us-west-1.amazonaws.com/amazon-eks/1.22.6/2022-03-09/bin/linux/amd64/kubectl
             install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
             curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
             mv /tmp/eksctl /usr/local/bin
       - run:
           name: create new cluster
           command: |
-            if eksctl create cluster --name devops --region=us-east-1
+            if eksctl create cluster --name devops --region=us-west-1
             then
               echo "creating new cluster"
-              aws eks update-kubeconfig --name devops --region us-east-1
-              kubectl create deploy devops --image="vineetrai089/hello-image:${CIRCLE_WORKFLOW_ID:0:7}"
+              aws eks update-kubeconfig --name devops --region us-west-1
+              kubectl create deploy devops --image="vineetrai089/hello-udacity-image:${CIRCLE_WORKFLOW_ID:0:7}"
               kubectl expose deployment devops --type=LoadBalancer --port=80 --target-port=80
             else
-              aws eks update-kubeconfig --name devops --region us-east-1
+              aws eks update-kubeconfig --name devops --region us-west-1
               echo "update existing cluster"
               kubectl get deploy,rs,svc,pods
-              kubectl set image deployment/devops hello-image="vineetrai089/hello-image:${CIRCLE_WORKFLOW_ID:0:7}"
+              kubectl set image deployment/devops hello-udacity-image="vineetrai089/hello-udacity-image:${CIRCLE_WORKFLOW_ID:0:7}"
             fi
 
   smoke-test:
@@ -92,13 +92,13 @@ jobs:
       - run:
           name: Install dependancies
           command: |
-            curl -o kubectl https://s3.us-east-1.amazonaws.com/amazon-eks/1.22.6/2022-03-09/bin/linux/amd64/kubectl
+            curl -o kubectl https://s3.us-west-1.amazonaws.com/amazon-eks/1.22.6/2022-03-09/bin/linux/amd64/kubectl
             install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
       - run:
           name: Test load balancer
           command: |
-            aws eks update-kubeconfig --name devops --region us-east-1
-            if curl -s http://a99e2b391dd0340829cd94b573952c22-46524376.us-east-1.elb.amazonaws.com/ | grep "Udacity"
+            aws eks update-kubeconfig --name devops --region us-west-1
+            if curl -s http://a99e2b391dd0340829cd94b573952c22-46524376.us-west-1.elb.amazonaws.com/ | grep "Udacity"
             then
               echo "OK!"
             else

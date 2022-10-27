@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: hello-app
-  namespace: hello-app
+  name: hello-udacity-app
+  namespace: hello-udacity-app
   labels:
     app: hello-app
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: hello-app
+      app: hello-udacity-app
   template:
     metadata:
       labels:
-        app: hello-app
+        app: hello-udacity--app
     spec:
       affinity:
         nodeAffinity:
@@ -26,8 +26,8 @@ spec:
                       - amd64
                       - arm64
       containers:
-        - name: hello-app
-          image: mo9348/hello-image:latest
+        - name: hello-udacity-app
+          image: vineetrai089/hello-udacity-image:latest
           ports:
             - name: http
               containerPort: 80
