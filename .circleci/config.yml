@@ -1,127 +1,120 @@
-# Python CircleCI 2.0 configuration file
-#
-# Check https://circleci.com/docs/2.0/language-python/ for more details
-#
 version: 2.1
 
 orbs:
-  docker: circleci/docker@2.1.2
+  aws-eks: circleci/aws-eks@2.2.0
+  kubernetes: circleci/kubernetes@1.3
+  aws-cli: circleci/aws-cli@3.1.1
+
+commands:
+  destroy-environment:
+    description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
+    steps:
+      - run:
+          name: Destroy environments
+          when: on_fail
+          command: |
+            aws delete cluster --stack-name --region=us-east-2 "eksctl-${CIRCLE_WORKFLOW_ID:0:7}"
 
 jobs:
-  Build:
+  test-build:
     docker:
-      # Use the same Docker base as the project
       - image: python:3.7.3-stretch
-
-    working_directory: ~/repo
 
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - v1-dependencies-{{ checksum "requirements.txt" }}
-            - v1-dependencies-
       - run:
           name: install dependencies
           command: |
-            python3 -m venv capstone
-            . capstone/bin/activate
+            python3 -m venv .devops
+            source .devops/bin/activate
             make install
-      - save_cache:
-          paths:
-            - ./capstone
-          key: v1-dependencies-{{ checksum "requirements.txt" }}
-
-          # run lint!
       - run:
           name: run lint
           command: |
-            . capstone/bin/activate
+            source .devops/bin/activate
             make lint
 
-  Build_Docker_Image:
+  upload-docker:
     docker:
-      - image: cimg/base:2022.06
-        auth:
-          username: $DOCKER_USERNAME
-          password: $DOCKER_PASS
+      - image: cimg/go:1.17
     steps:
       - checkout
       - setup_remote_docker:
           version: 20.10.14
       - run:
-          name: Build and run docker image
+          name: Build docker container
           command: |
-            #ensure docker is running
-            docker --version
-            #build docker image
-            docker build . --tag capstone
-            #list docker images
-            docker images capstone
-            #run the container
-            docker run -p 80:5000 capstone
+            docker build --tag=hello-image .
+            docker image ls
       - run:
-          name: Push docker image to Hub
+          name: Upload Docker to Dockerhub
           command: |
-            #set path 
-            dockerpath=vineetrai089/capstone
-            #login to docker hub
-            echo $DOCKER_PASS | docker login -u $DOCKER_USERNAME --password-stdin
-            docker tag capstone $dockerpath
-            #push the image to hub
-            docker push $dockerpath
+            dockerpath="vineetrai089/hello-image"
+            docker login --username=vineetrai089 --password=$DOCKER_PASS
+            docker tag "hello-image" "${dockerpath}:${CIRCLE_WORKFLOW_ID:0:7}"
+            docker tag "hello-image" "${dockerpath}:latest"
+            docker push "${dockerpath}:${CIRCLE_WORKFLOW_ID:0:7}"
+            docker push "${dockerpath}:latest"
 
-  Deploy_AWS_Kube:
+  deploy:
     docker:
-      - image: cimg/base:2022.06
-    working_directory: ~/repo
+      - image: amazon/aws-cli
     steps:
       - checkout
       - run:
-          name: Install Dependencies for Kube configuration
+          name: Install dependancies
           command: |
-            sudo apt-get update && sudo apt-get upgrade
-
-            # install AWS CLI at latest version
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            sudo ./aws/install
-
-            # Install kubectl
-            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-            sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-            ls -l /usr/local/bin/kubectl
-
-            # Install eksctl
+            yum install -y tar gzip
+            curl -o kubectl https://s3.us-east-1.amazonaws.com/amazon-eks/1.22.6/2022-03-09/bin/linux/amd64/kubectl
+            install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
             curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
-            sudo mv /tmp/eksctl /usr/local/bin
-            ls -l /usr/local/bin/eksctl
+            mv /tmp/eksctl /usr/local/bin
       - run:
-          name: Build AWS Kubernetes cluster
+          name: create new cluster
           command: |
-            export TERM=xterm
-            aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-            aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-            aws configure set default.region $AWS_DEFAULT_REGION
-            nohup aws cloudformation list-exports > output.txt
-            chmod 755 aws_kube_infra.sh
-            ./aws_kube_infra.sh
+            if eksctl create cluster --name devops --region=us-east-1
+            then
+              echo "creating new cluster"
+              aws eks update-kubeconfig --name devops --region us-east-1
+              kubectl create deploy devops --image="vineetrai089/hello-image:${CIRCLE_WORKFLOW_ID:0:7}"
+              kubectl expose deployment devops --type=LoadBalancer --port=80 --target-port=80
+            else
+              aws eks update-kubeconfig --name devops --region us-east-1
+              echo "update existing cluster"
+              kubectl get deploy,rs,svc,pods
+              kubectl set image deployment/devops hello-image="vineetrai089/hello-image:${CIRCLE_WORKFLOW_ID:0:7}"
+            fi
+
+  smoke-test:
+    docker:
+      - image: amazon/aws-cli
+    steps:
       - run:
-          name: Deploy onto Kube cluster
+          name: Install dependancies
           command: |
-            #kubectl --kubeconfig /home/circleci/.kube/config get nodes
-            kubectl get nodes
-            # Deploy an App from the Dockerhub to the Kubernetes Cluster
-            kubectl create deploy capstone --image=vineetrai089/capstone:latest
-            # See the status
-            #kubectl --kubeconfig /home/circleci/.kube/config get deploy,rs,svc,pods
-            kubectl get deploy,rs,svc,pods
+            curl -o kubectl https://s3.us-east-1.amazonaws.com/amazon-eks/1.22.6/2022-03-09/bin/linux/amd64/kubectl
+            install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+      - run:
+          name: Test load balancer
+          command: |
+            aws eks update-kubeconfig --name devops --region us-east-1
+            if curl -s http://a99e2b391dd0340829cd94b573952c22-46524376.us-east-1.elb.amazonaws.com/ | grep "Udacity"
+            then
+              echo "OK!"
+            else
+              kubectl rollout undo deployments/devops
+            fi
 
 workflows:
   default:
     jobs:
-      - Build
-      - Build_Docker_Image:
-          requires: [Build]
-      - Deploy_AWS_Kube:
-          requires: [Build_Docker_Image]
+      - test-build
+      - upload-docker:
+          requires: [test-build]
+      - deploy:
+          requires: [upload-docker]
+          filters:
+            branches:
+              only: [main]
+      - smoke-test:
+          requires: [deploy]
