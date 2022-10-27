@@ -7,7 +7,7 @@ orbs:
 
 commands:
   destroy-environment:
-    description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
+    description: Destroy back-end and front-end cloudformation stacks.
     steps:
       - run:
           name: Destroy environments
@@ -16,7 +16,7 @@ commands:
             aws delete cluster --stack-name --region=us-west-2 "eksctl-${CIRCLE_WORKFLOW_ID:0:7}"
 
 jobs:
-  test-build:
+  build:
     docker:
       - image: python:3.7.3-stretch
 
@@ -74,13 +74,13 @@ jobs:
           command: |
             if eksctl create cluster --name devops --region=us-west-2
             then
-              echo "creating new cluster"
+              echo "creating new Stack"
               aws eks update-kubeconfig --name devops --region us-west-2
               kubectl create deploy devops --image="vineetrai089/hello-udacity-image:${CIRCLE_WORKFLOW_ID:0:7}"
               kubectl expose deployment devops --type=LoadBalancer --port=80 --target-port=80
             else
               aws eks update-kubeconfig --name devops --region us-west-2
-              echo "update existing cluster"
+              echo "update existing Stack"
               kubectl get deploy,rs,svc,pods
               kubectl set image deployment/devops hello-udacity-image="vineetrai089/hello-udacity-image:${CIRCLE_WORKFLOW_ID:0:7}"
             fi
@@ -100,7 +100,7 @@ jobs:
             aws eks update-kubeconfig --name devops --region us-west-2
             if curl -s http://a115bdbb1f1da47d39ae427c9749753b-187578367.us-west-2.elb.amazonaws.com/ | grep "Vineet"
             then
-              echo "OK!"
+              echo "Verified!"
             else
               kubectl rollout undo deployments/devops
             fi
@@ -108,9 +108,9 @@ jobs:
 workflows:
   default:
     jobs:
-      - test-build
+      - build
       - upload-docker:
-          requires: [test-build]
+          requires: [build]
       - deploy:
           requires: [upload-docker]
           filters:
