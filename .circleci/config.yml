@@ -98,7 +98,7 @@ jobs:
           name: Test load balancer
           command: |
             aws eks update-kubeconfig --name devops --region us-west-2
-            if curl -s http://a115bdbb1f1da47d39ae427c9749753b-187578367.us-west-2.elb.amazonaws.com/ | grep "Udacity"
+            if curl -s http://a115bdbb1f1da47d39ae427c9749753b-187578367.us-west-2.elb.amazonaws.com/ | grep "Vineet"
             then
               echo "OK!"
             else
