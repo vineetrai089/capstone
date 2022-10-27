@@ -13,7 +13,7 @@ commands:
           name: Destroy environments
           when: on_fail
           command: |
-            aws delete cluster --stack-name --region=us-west-1 "eksctl-${CIRCLE_WORKFLOW_ID:0:7}"
+            aws delete cluster --stack-name --region=us-west-2 "eksctl-${CIRCLE_WORKFLOW_ID:0:7}"
 
 jobs:
   test-build:
@@ -65,21 +65,21 @@ jobs:
           name: Install dependancies
           command: |
             yum install -y tar gzip
-            curl -o kubectl https://s3.us-west-1.amazonaws.com/amazon-eks/1.22.6/2022-03-09/bin/linux/amd64/kubectl
+            curl -o kubectl https://s3.us-west-2.amazonaws.com/amazon-eks/1.22.6/2022-03-09/bin/linux/amd64/kubectl
             install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
             curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
             mv /tmp/eksctl /usr/local/bin
       - run:
           name: create new cluster
           command: |
-            if eksctl create cluster --name devops --region=us-west-1
+            if eksctl create cluster --name devops --region=us-west-2
             then
               echo "creating new cluster"
-              aws eks update-kubeconfig --name devops --region us-west-1
+              aws eks update-kubeconfig --name devops --region us-west-2
               kubectl create deploy devops --image="vineetrai089/hello-udacity-image:${CIRCLE_WORKFLOW_ID:0:7}"
               kubectl expose deployment devops --type=LoadBalancer --port=80 --target-port=80
             else
-              aws eks update-kubeconfig --name devops --region us-west-1
+              aws eks update-kubeconfig --name devops --region us-west-2
               echo "update existing cluster"
               kubectl get deploy,rs,svc,pods
               kubectl set image deployment/devops hello-udacity-image="vineetrai089/hello-udacity-image:${CIRCLE_WORKFLOW_ID:0:7}"
@@ -92,13 +92,13 @@ jobs:
       - run:
           name: Install dependancies
           command: |
-            curl -o kubectl https://s3.us-west-1.amazonaws.com/amazon-eks/1.22.6/2022-03-09/bin/linux/amd64/kubectl
+            curl -o kubectl https://s3.us-west-2.amazonaws.com/amazon-eks/1.22.6/2022-03-09/bin/linux/amd64/kubectl
             install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
       - run:
           name: Test load balancer
           command: |
-            aws eks update-kubeconfig --name devops --region us-west-1
-            if curl -s http://a99e2b391dd0340829cd94b573952c22-46524376.us-west-1.elb.amazonaws.com/ | grep "Udacity"
+            aws eks update-kubeconfig --name devops --region us-west-2
+            if curl -s http://a99e2b391dd0340829cd94b573952c22-46524376.us-west-2.elb.amazonaws.com/ | grep "Udacity"
             then
               echo "OK!"
             else
